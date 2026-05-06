@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { DragDropContext, Droppable } from '@hello-pangea/dnd';
 import type { DropResult } from '@hello-pangea/dnd';
 import { fetchWithAuth } from '../utils/api';
@@ -6,7 +6,8 @@ import { toast } from 'sonner';
 import TaskCard from '../components/TaskCard';
 import CreateTaskModal from '../components/CreateTaskModal';
 import EditTaskModal from '../components/EditTaskModal';
-import { Plus, Filter } from 'lucide-react';
+import { Plus, Filter, Search, X } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
 const COLUMNS = [
   { id: 'TODO', title: 'To Do', color: 'bg-slate-500' },
@@ -22,7 +23,17 @@ export default function KanbanBoard() {
   const [taskToEdit, setTaskToEdit] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [userId, setUserId] = useState<string>('');
-  const [filter, setFilter] = useState<'All' | 'My'>('All');
+  
+  // Filters
+  const [searchQuery, setSearchQuery] = useState('');
+  const [priorityFilter, setPriorityFilter] = useState('');
+  const [assigneeFilter, setAssigneeFilter] = useState('');
+  const [boardView, setBoardView] = useState<'All' | 'My'>('All');
+  const [users, setUsers] = useState<any[]>([]);
+
+  const location = useLocation();
+  const searchParams = new URLSearchParams(location.search);
+  const projectId = searchParams.get('projectId');
 
   useEffect(() => {
     const userStr = localStorage.getItem('user');
@@ -33,12 +44,22 @@ export default function KanbanBoard() {
         setUserId(user.id || user._id);
       } catch (e) {}
     }
+    loadUsers();
     loadTasks();
-  }, []);
+  }, [projectId]);
+
+  const loadUsers = async () => {
+    try {
+      const data = await fetchWithAuth('/users');
+      setUsers(data);
+    } catch (e) {}
+  };
 
   const loadTasks = async () => {
     try {
-      const data = await fetchWithAuth('/tasks');
+      let url = '/tasks';
+      if (projectId) url += `?projectId=${projectId}`;
+      const data = await fetchWithAuth(url);
       setTasks(data);
     } catch (error: any) {
       toast.error('Failed to load tasks');
@@ -87,7 +108,8 @@ export default function KanbanBoard() {
 
   const handleCreateTask = async (taskData: any) => {
     try {
-      const newTask = await fetchWithAuth('/tasks', {
+      if (projectId) taskData.projectId = projectId;
+      await fetchWithAuth('/tasks', {
         method: 'POST',
         body: JSON.stringify(taskData),
       });
@@ -122,57 +144,149 @@ export default function KanbanBoard() {
 
   const handleDeleteTask = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this task?')) return;
-    try {
-      await fetchWithAuth(`/tasks/${id}`, { method: 'DELETE' });
-      setTasks(tasks.filter((t) => t._id !== id));
-      toast.success('Task deleted');
-    } catch (error) {
-      toast.error('Failed to delete task. Make sure you are an Admin.');
-    }
+    
+    // Save state for undo
+    const prevTasks = [...tasks];
+    
+    // Optimistic update
+    setTasks(tasks.filter((t) => t._id !== id));
+
+    toast.success('Task deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          // Revert optimistic update
+          setTasks(prevTasks);
+          toast.success('Task restored');
+        }
+      },
+      onAutoClose: async () => {
+        // If not undone, actually delete from server
+        try {
+          const res = await fetchWithAuth(`/tasks/${id}`, { method: 'DELETE' });
+          if (!res) throw new Error('Delete failed'); // res is null on 204
+        } catch (error) {
+          // If server fails, revert
+          setTasks(prevTasks);
+          toast.error('Failed to delete task permanently.');
+        }
+      }
+    });
   };
 
   const filteredTasks = tasks.filter(t => {
-    if (filter === 'All') return true;
-    const isUnassigned = !t.assignees || t.assignees.length === 0;
-    const isAssignedToMe = t.assignees?.some((a: any) => (a._id || a) === userId);
-    return isUnassigned || isAssignedToMe;
+    // 1. Board View Filter
+    if (boardView === 'My') {
+      const isAssignedToMe = t.assignees?.some((a: any) => (a._id || a) === userId);
+      if (!isAssignedToMe) return false;
+    }
+    // 2. Search Query
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchesTitle = t.title?.toLowerCase().includes(q);
+      const matchesDesc = t.description?.toLowerCase().includes(q);
+      if (!matchesTitle && !matchesDesc) return false;
+    }
+    // 3. Priority
+    if (priorityFilter && t.priority !== priorityFilter) return false;
+    // 4. Assignee
+    if (assigneeFilter) {
+      const hasAssignee = t.assignees?.some((a: any) => a._id === assigneeFilter || a === assigneeFilter);
+      if (!hasAssignee) return false;
+    }
+    return true;
   });
 
   if (loading) return <div className="p-8 text-center text-slate-400">Loading board...</div>;
 
   return (
     <div className="h-full flex flex-col relative">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-slate-100">Project Board</h2>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-sm text-slate-400 flex items-center">
-              <Filter className="w-4 h-4 mr-1" /> View:
-            </span>
-            <div className="bg-black/20 p-1 rounded-lg inline-flex">
+          <h2 className="text-2xl font-bold text-slate-100">
+            {projectId ? 'Project Board' : 'Global Board'}
+          </h2>
+          <div className="flex flex-wrap items-center gap-4 mt-3">
+            {/* Search */}
+            <div className="relative">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search tasks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-4 py-1.5 bg-black/20 border border-white/10 rounded-lg text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-indigo-500 w-48 transition-all"
+              />
+            </div>
+
+            {/* Filters */}
+            <div className="flex items-center gap-2 bg-black/20 p-1.5 rounded-lg border border-white/5">
+              <Filter className="w-4 h-4 text-slate-400 ml-1" />
+              
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value)}
+                className="bg-transparent text-sm text-slate-300 outline-none border-none cursor-pointer"
+              >
+                <option value="" className="bg-slate-800">All Priorities</option>
+                <option value="Low" className="bg-slate-800">Low</option>
+                <option value="Medium" className="bg-slate-800">Medium</option>
+                <option value="High" className="bg-slate-800">High</option>
+              </select>
+
+              <div className="w-px h-4 bg-white/10 mx-1"></div>
+
+              <select
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value)}
+                className="bg-transparent text-sm text-slate-300 outline-none border-none cursor-pointer max-w-[120px]"
+              >
+                <option value="" className="bg-slate-800">All Assignees</option>
+                {users.map(u => (
+                  <option key={u._id} value={u._id} className="bg-slate-800">{u.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Board View */}
+            <div className="bg-black/20 p-1 rounded-lg inline-flex border border-white/5">
               <button
-                onClick={() => setFilter('All')}
+                onClick={() => setBoardView('All')}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  filter === 'All' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:text-slate-300'
+                  boardView === 'All' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:text-slate-300'
                 }`}
               >
-                All Tasks
+                All
               </button>
               <button
-                onClick={() => setFilter('My')}
+                onClick={() => setBoardView('My')}
                 className={`px-3 py-1 text-xs font-semibold rounded-md transition-colors ${
-                  filter === 'My' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:text-slate-300'
+                  boardView === 'My' ? 'bg-indigo-500/20 text-indigo-400' : 'text-slate-400 hover:text-slate-300'
                 }`}
               >
-                My & Team Tasks
+                My Tasks
               </button>
             </div>
+            
+            {(searchQuery || priorityFilter || assigneeFilter || boardView !== 'All') && (
+              <button 
+                onClick={() => {
+                  setSearchQuery('');
+                  setPriorityFilter('');
+                  setAssigneeFilter('');
+                  setBoardView('All');
+                }}
+                className="text-xs text-rose-400 hover:text-rose-300 flex items-center"
+              >
+                <X className="w-3 h-3 mr-1" /> Clear
+              </button>
+            )}
           </div>
         </div>
         
         <button
           onClick={() => setIsModalOpen(true)}
-          className="flex items-center px-4 py-2 bg-gradient-to-r from-indigo-600 to-sky-500 hover:from-indigo-500 hover:to-sky-400 text-white rounded-lg shadow-lg shadow-indigo-500/20 transition-all transform active:scale-95 h-10"
+          className="flex items-center px-4 py-2 bg-gradient-to-r from-indigo-600 to-sky-500 hover:from-indigo-500 hover:to-sky-400 text-white rounded-lg shadow-lg shadow-indigo-500/20 transition-all transform active:scale-95 h-10 whitespace-nowrap"
         >
           <Plus className="w-5 h-5 mr-1" /> New Task
         </button>

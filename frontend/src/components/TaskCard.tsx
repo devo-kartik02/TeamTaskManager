@@ -1,6 +1,5 @@
-import React from 'react';
 import { Draggable } from '@hello-pangea/dnd';
-import { Clock, AlertCircle, Trash2, User, Edit } from 'lucide-react';
+import { Clock, Edit, Trash2, User, AlertTriangle, CalendarDays } from 'lucide-react';
 
 interface TaskCardProps {
   task: any;
@@ -19,6 +18,17 @@ export default function TaskCard({ task, index, isAdmin, onDelete, onEdit }: Tas
       default: return 'text-slate-400 bg-slate-400/10 border-slate-400/20';
     }
   };
+
+  const getDaysRemaining = (deadline: string) => {
+    if (!deadline) return null;
+    const diffTime = new Date(deadline).getTime() - new Date().getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays;
+  };
+
+  const daysRemaining = getDaysRemaining(task.deadline);
+  const isOverdue = daysRemaining !== null && daysRemaining < 0;
+  const isDueSoon = daysRemaining !== null && daysRemaining >= 0 && daysRemaining <= 3;
 
   const hasAssignees = task.assignees && task.assignees.length > 0;
 
@@ -63,13 +73,26 @@ export default function TaskCard({ task, index, isAdmin, onDelete, onEdit }: Tas
             <p className="text-sm text-slate-400 mb-4 line-clamp-2">{task.description}</p>
           )}
 
+          <div className="flex items-center gap-2 mb-4 flex-wrap">
+            <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full border ${getPriorityColor(task.priority)} flex items-center`}>
+              {task.priority}
+            </span>
+            
+            {daysRemaining !== null && (
+              <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full border flex items-center ${
+                isOverdue ? 'text-rose-400 bg-rose-400/10 border-rose-400/20' : 
+                isDueSoon ? 'text-amber-400 bg-amber-400/10 border-amber-400/20' : 
+                'text-slate-400 bg-slate-400/10 border-slate-400/20'
+              }`}>
+                {isOverdue ? <AlertTriangle className="w-3 h-3 mr-1" /> : <CalendarDays className="w-3 h-3 mr-1" />}
+                {isOverdue ? `Overdue by ${Math.abs(daysRemaining)}d` : 
+                 daysRemaining === 0 ? 'Due Today' : `${daysRemaining} days left`}
+              </span>
+            )}
+          </div>
+
           <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/5 flex-wrap gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full border ${getPriorityColor(task.priority)} flex items-center`}>
-                <AlertCircle className="w-3 h-3 mr-1" />
-                {task.priority}
-              </span>
-              
               {hasAssignees && task.assignees.map((assignee: any) => (
                 <span key={assignee._id || assignee} className="text-[10px] uppercase font-bold tracking-wider px-2 py-1 rounded-full border border-indigo-400/20 bg-indigo-400/10 text-indigo-400 flex items-center" title="Assignee">
                   <User className="w-3 h-3 mr-1" />

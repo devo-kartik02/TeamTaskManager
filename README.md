@@ -6,14 +6,17 @@ TaskMaster is a modern, high-fidelity Team Task Management application built to 
 
 ## ✨ Key Features
 
-- **Immersive User Interface:** A stunning, fully responsive UI built with Tailwind CSS, featuring glassmorphism, smooth animations, and a split-screen authentication flow.
-- **Interactive Kanban Board:** Drag-and-drop tasks seamlessly across "To Do", "In Progress", and "Done" columns.
-- **Advanced Task Assignment:** Support for co-assignment. Assign tasks to multiple team members simultaneously.
-- **Role-Based Access Control (RBAC):** 
-  - **Admins:** Can create, edit, reassign, and delete tasks.
-  - **Members:** Can view and manage tasks but have restricted destructive capabilities.
-- **Personalized Views:** Quickly toggle between viewing the entire team's workload or filtering down to "My & Team Tasks".
-- **Secure Authentication:** JWT-based authentication system with secure routing.
+- **Modern Glassmorphic UI:** A visually stunning, fully responsive interface built with Tailwind CSS.
+- **Advanced State Management:** Drag-and-drop Kanban board using `@hello-pangea/dnd`.
+- **Project Organization:** Group tasks into separate projects with completion percentage tracking (Recharts).
+- **Real-Time Data Visualizations:** Dynamic Bar & Area charts for weekly productivity using `recharts`.
+- **Global Search & Filtering:** Powerful multi-select filters for Priority, Assignees, and search queries.
+- **Activity Logging:** Comprehensive task tracking and "Recent Activity" feeds.
+- **Email Notifications:** Automated NodeMailer triggers for task assignment.
+- **Smart Task Cards:** Badges for "Days Remaining" and "Overdue" status.
+- **Advanced Toasts:** Sonner notifications with "Undo" capabilities.
+- **Role-Based Access Control:** Admin vs. Member permissions.
+- **Secure Authentication:** JWT-based authentication with bcrypt password hashing.
 
 ## 🛠️ Technology Stack
 

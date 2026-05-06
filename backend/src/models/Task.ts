@@ -9,6 +9,7 @@ export interface ITask extends Document {
   createdBy: mongoose.Types.ObjectId;
   deadline?: Date;
   order: number; // For drag and drop ordering within a status column
+  projectId?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -31,6 +32,7 @@ const TaskSchema: Schema = new Schema(
     createdBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     deadline: { type: Date },
     order: { type: Number, default: 0 },
+    projectId: { type: Schema.Types.ObjectId, ref: 'Project' },
   },
   { timestamps: true }
 );

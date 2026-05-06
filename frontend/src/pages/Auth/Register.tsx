@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { fetchWithAuth } from '../../utils/api';
-import { Lock, Mail, User, Shield, ArrowRight, CheckSquare, Layers, Users, Zap } from 'lucide-react';
+import { Lock, Mail, User, Shield, ArrowRight, Layers, Users, Zap } from 'lucide-react';
 
 export default function Register() {
   const [name, setName] = useState('');

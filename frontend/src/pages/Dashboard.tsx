@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
+import { useEffect, useState } from 'react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 import { fetchWithAuth } from '../utils/api';
-import { Activity, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { Activity, CheckCircle, Clock, AlertTriangle, UserCircle, MessageSquare } from 'lucide-react';
+import { format, subDays, startOfDay, endOfDay } from 'date-fns';
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -11,26 +12,55 @@ export default function Dashboard() {
     done: 0,
     total: 0,
   });
-
+  const [activities, setActivities] = useState<any[]>([]);
+  const [weeklyData, setWeeklyData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const loadStats = async () => {
+    const loadDashboardData = async () => {
       try {
-        const data = await fetchWithAuth('/tasks');
-        const todo = data.filter((t: any) => t.status === 'TODO').length;
-        const inProgress = data.filter((t: any) => t.status === 'IN_PROGRESS').length;
-        const done = data.filter((t: any) => t.status === 'DONE').length;
+        const [tasksData, activitiesData] = await Promise.all([
+          fetchWithAuth('/tasks'),
+          fetchWithAuth('/activities')
+        ]);
         
-        setStats({ todo, inProgress, done, total: data.length });
+        const todo = tasksData.filter((t: any) => t.status === 'TODO').length;
+        const inProgress = tasksData.filter((t: any) => t.status === 'IN_PROGRESS').length;
+        const done = tasksData.filter((t: any) => t.status === 'DONE').length;
+        
+        setStats({ todo, inProgress, done, total: tasksData.length });
+        setActivities(activitiesData);
+
+        // Compute Weekly Productivity
+        const days = [];
+        for (let i = 6; i >= 0; i--) {
+          const date = subDays(new Date(), i);
+          const dayName = format(date, 'EEE'); // Mon, Tue, etc.
+          const start = startOfDay(date).getTime();
+          const end = endOfDay(date).getTime();
+          
+          // Find activities that are "Moved Task" or "Deleted Task" or "Assigned Task" inside this day.
+          // Wait, the requirement was "tasks completed each day".
+          // We can check ActivityLogs for action === 'Moved Task' and details containing 'DONE'.
+          const completedThatDay = activitiesData.filter((act: any) => 
+            act.action === 'Moved Task' && 
+            act.details.includes('DONE') &&
+            new Date(act.createdAt).getTime() >= start &&
+            new Date(act.createdAt).getTime() <= end
+          ).length;
+
+          days.push({ day: dayName, completed: completedThatDay });
+        }
+        setWeeklyData(days);
+
       } catch (error) {
-        console.error('Failed to load stats');
+        console.error('Failed to load dashboard data');
       } finally {
         setLoading(false);
       }
     };
 
-    loadStats();
+    loadDashboardData();
   }, []);
 
   const data = [
@@ -39,14 +69,14 @@ export default function Dashboard() {
     { name: 'Done', value: stats.done },
   ];
 
-  const activityData = [
-    { day: 'Mon', tasks: 4 },
-    { day: 'Tue', tasks: 7 },
-    { day: 'Wed', tasks: 5 },
-    { day: 'Thu', tasks: 12 },
-    { day: 'Fri', tasks: 8 },
-    { day: 'Sat', tasks: 3 },
-    { day: 'Sun', tasks: 6 },
+  const activityData = weeklyData.length ? weeklyData : [
+    { day: 'Mon', completed: 0 },
+    { day: 'Tue', completed: 0 },
+    { day: 'Wed', completed: 0 },
+    { day: 'Thu', completed: 0 },
+    { day: 'Fri', completed: 0 },
+    { day: 'Sat', completed: 0 },
+    { day: 'Sun', completed: 0 },
   ];
 
   const cardVariants = {
@@ -57,7 +87,7 @@ export default function Dashboard() {
       transition: {
         delay: i * 0.1,
         duration: 0.5,
-        ease: 'easeOut',
+        ease: 'easeOut' as const,
       },
     }),
   };
@@ -131,24 +161,56 @@ export default function Dashboard() {
         >
           <h3 className="text-lg font-semibold mb-6">Weekly Activity</h3>
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={activityData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorTasks" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
-                </linearGradient>
-              </defs>
+            <BarChart data={activityData} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
               <XAxis dataKey="day" stroke="#94a3b8" tickLine={false} axisLine={false} />
               <YAxis stroke="#94a3b8" tickLine={false} axisLine={false} />
               <Tooltip
                 contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px', color: '#f8fafc' }}
+                cursor={{ fill: '#ffffff05' }}
               />
-              <Area type="monotone" dataKey="tasks" stroke="#0ea5e9" strokeWidth={3} fillOpacity={1} fill="url(#colorTasks)" />
-            </AreaChart>
+              <Bar dataKey="completed" fill="#10b981" radius={[4, 4, 0, 0]} />
+            </BarChart>
           </ResponsiveContainer>
         </motion.div>
       </div>
+
+      {/* Activity Feed */}
+      <motion.div
+        custom={6}
+        initial="hidden"
+        animate="visible"
+        variants={cardVariants}
+        className="glass-panel p-6 mt-6"
+      >
+        <h3 className="text-lg font-semibold mb-6 flex items-center">
+          <MessageSquare className="w-5 h-5 mr-2 text-indigo-400" />
+          Recent Activity
+        </h3>
+        {activities.length === 0 ? (
+          <p className="text-slate-400 text-center py-4">No recent activity found.</p>
+        ) : (
+          <div className="space-y-4">
+            {activities.slice(0, 10).map((activity: any) => (
+              <div key={activity._id} className="flex items-start gap-4 p-3 bg-black/20 rounded-xl border border-white/5">
+                <div className="bg-indigo-500/10 p-2 rounded-full text-indigo-400 mt-1">
+                  <UserCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-sm text-slate-200">
+                    <span className="font-semibold text-indigo-300 mr-1">{activity.userId?.name || 'User'}</span> 
+                    {activity.action}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-1">{activity.details}</p>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {format(new Date(activity.createdAt), 'MMM d, h:mm a')}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
     </div>
   );
 }

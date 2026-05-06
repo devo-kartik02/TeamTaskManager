@@ -3,11 +3,12 @@ import { Toaster } from 'sonner';
 import Sidebar from './components/Sidebar';
 import KanbanBoard from './pages/KanbanBoard';
 import Dashboard from './pages/Dashboard';
+import Projects from './pages/Projects';
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 
 // Protect routes
-const PrivateRoute = ({ children }: { children: JSX.Element }) => {
+const PrivateRoute = ({ children }: { children: React.ReactNode }) => {
   const token = localStorage.getItem('token');
   return token ? children : <Navigate to="/login" />;
 };
@@ -43,7 +44,16 @@ const AppLayout = () => {
             } 
           />
 
-          <Route path="/" element={<Navigate to="/board" />} />
+          <Route 
+            path="/projects" 
+            element={
+              <PrivateRoute>
+                <Projects />
+              </PrivateRoute>
+            } 
+          />
+
+          <Route path="/" element={<Navigate to="/dashboard" />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </main>
