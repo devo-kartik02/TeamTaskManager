@@ -14,7 +14,7 @@ import activityRoutes from './routes/activityRoutes';
 import { initMailer } from './utils/mailer';
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 10000;
 
 // Middleware
 app.use(cors());
@@ -34,15 +34,19 @@ app.get('/api/health', (req, res) => {
 // Database Connection
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/teamtaskmanager';
 
+// Start the server immediately so Render/Railway sees it as "Active"
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
+
+// Connect to MongoDB separately
 mongoose
   .connect(MONGO_URI)
   .then(async () => {
     console.log('✅ Connected to MongoDB');
     await initMailer();
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-    });
   })
   .catch((err) => {
+    // This will now log the error without killing the whole process
     console.error('❌ Failed to connect to MongoDB:', err);
   });
